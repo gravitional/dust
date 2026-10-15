@@ -105,14 +105,20 @@ On Windows, an optional persistent snapshot can avoid walking the directory tree
 ```powershell
 dust --build-index C:\Users\tom
 dust --indexed C:\Users\tom
-# Explicitly ask Windows to show a UAC prompt for USN Journal access
+# Build or refresh with administrator access when the USN Journal requires it
 dust --elevate --build-index C:\Users\tom
-dust --elevate --indexed C:\Users\tom
+# Build the index first, then install the background service as administrator
+dust --build-index C:\Users\tom
+dust --install-indexer-service C:\Users\tom
 ```
 
-The SQLite snapshot is stored under `%LOCALAPPDATA%\dust`. The index is scoped to the path passed to `--build-index`; queries outside that scope fall back to the normal walker. The first build scans the selected tree. Later refreshes use the NTFS USN Journal when it is available and reject a reset, wraparound, or unsupported journal version instead of returning stale totals. Install the optional Windows service with `dust --install-indexer-service C:\Users\tom`; it refreshes the configured index in the background and serves indexed queries over a local named pipe. Indexed mode currently supports the default size report without filters, links, file counts, or filesystem limits; unsupported options automatically use the normal walker.
+The SQLite snapshot is stored under `%LOCALAPPDATA%\dust` and is scoped to the path passed to `--build-index`. The first build enumerates the tree with `FileIdBothDirectoryInfo` and stores file IDs, parent IDs, sizes, and directory totals. When the NTFS USN Journal is available, the build also records a journal cursor; later service refreshes use `FSCTL_READ_USN_JOURNAL` and rescan only affected subtrees. A journal reset, wraparound, volume change, or unsupported record version invalidates incremental refresh rather than returning stale totals.
 
-`--elevate` re-executes the same command through the native Windows UAC prompt, waits for the elevated process, and returns its exit code. It is explicit so normal `dust` commands never trigger a UAC prompt. An elevated indexed query may rebuild a stale index after reading the USN Journal; it prints that status before scanning. Choosing No or closing the prompt cancels the operation.
+On Windows, a compatible default report first tries the `dust-indexer` named-pipe service, then a local SQLite snapshot, and finally the ordinary directory walker. `--indexed` makes an unavailable index visible as a warning; `--no-index` disables both service and local-index access. Indexed reports currently support the default size view, `--depth`, `--apparent-size`, and normal path selection. Filters, hidden-file exclusion, ignored directories, link dereferencing, file counts, file types, time filters, filesystem limits, and `--collapse` use the ordinary walker.
+
+The optional service starts with Windows and maintains one configured index. Build the index before installing the service. Installation changes the Service Control Manager configuration and requires administrator approval. The service exposes only local named-pipe queries, validates the client access token before returning aggregate data, and opens the SQLite database under the `%LOCALAPPDATA%\dust` path configured at installation time. Remove it with the normal Windows service-management tools when it is no longer needed.
+
+`--elevate` re-executes the same command through the native Windows UAC prompt, waits for the elevated process, and returns its exit code. It is explicit, so normal `dust` commands never trigger a UAC prompt. Use it for an initial build when ordinary access cannot enumerate the selected tree or open the USN Journal. Choosing No or closing the prompt cancels the operation.
 
 The different colors on the bars: These represent the combined tree hierarchy & disk usage. The shades of grey are used to indicate which parent folder a subfolder belongs to. For instance, look at the above screenshot. `.steam` is a folder taking 44% of the space. From the `.steam` bar is a light grey line that goes up. All these folders are inside `.steam` so if you delete `.steam` all that stuff will be gone too.
 
@@ -156,6 +162,11 @@ Usage: dust --files0-from=FILE (Read NUL-terminated file paths from FILE; if FIL
 Usage: dust --files-from=FILE (Read newline-terminated file paths from FILE; if FILE is '-', read from stdin)
 Usage: dust --collapse=node-modules will keep the node-modules folder collapsed in display instead of recursively opening it
 Usage: dust --dim Displays dimmer bars
+Usage: dust --top Show direct children while aggregating nested sizes
+Usage: dust --build-index PATH Build the Windows SQLite index for PATH
+Usage: dust --indexed PATH Prefer the Windows service or SQLite index
+Usage: dust --no-index PATH Disable Windows index access
+Usage: dust --install-indexer-service PATH Install the Windows background index service
 
 ```
 
