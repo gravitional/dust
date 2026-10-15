@@ -60,6 +60,10 @@ pub struct Record {
     pub name: OsString,
 }
 
+fn should_descend(attributes: u32) -> bool {
+    attributes & FILE_ATTRIBUTE_DIRECTORY != 0 && attributes & FILE_ATTRIBUTE_REPARSE_POINT == 0
+}
+
 pub fn enumerate(path: &Path) -> Result<Vec<Record>> {
     let h = open_directory(path)?;
     // u64 storage guarantees alignment for the native variable-length records.
@@ -156,15 +160,6 @@ pub fn scan(root: &Path, _ignored: Option<&[PathBuf]>, first_id: i64) -> Result<
     let mut queue = VecDeque::from([(root, root_id, first_id)]);
     while let Some((path, fid, id)) = queue.pop_front() {
         for r in enumerate(&path)? {
-            // Reparse targets can cross volumes or cycle; explicit fallback is safer
-            // than silently persisting an incomplete tree.
-            if r.attributes & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
-                return Err(format!(
-                    "reparse point requires ordinary traversal: {}",
-                    path.join(&r.name).display()
-                )
-                .into());
-            }
             let child = path.join(&r.name);
             let is_dir = r.attributes & FILE_ATTRIBUTE_DIRECTORY != 0;
             let apparent = if is_dir { 0 } else { r.eof };
@@ -180,7 +175,9 @@ pub fn scan(root: &Path, _ignored: Option<&[PathBuf]>, first_id: i64) -> Result<
                 allocated,
                 attributes: r.attributes,
             });
-            if is_dir {
+            // Reparse points may cross volumes or form cycles. Keep the link
+            // itself in the index, but never follow its target during a scan.
+            if should_descend(r.attributes) {
                 queue.push_back((child, r.file_id, next_id));
             }
             next_id += 1;
@@ -211,5 +208,14 @@ mod tests {
     #[test]
     fn rejects_malformed_record() {
         assert!(parse_records(&[0; 32]).is_err());
+    }
+
+    #[test]
+    fn records_reparse_directories_without_following_them() {
+        assert!(should_descend(FILE_ATTRIBUTE_DIRECTORY));
+        assert!(!should_descend(
+            FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT
+        ));
+        assert!(!should_descend(FILE_ATTRIBUTE_REPARSE_POINT));
     }
 }

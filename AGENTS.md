@@ -15,6 +15,8 @@ fallback.
 - `dust-indexer/src/scanner.rs` enumerates directories with
   `GetFileInformationByHandleEx(FileIdBothDirectoryInfo)` and records file IDs,
   parent IDs, allocation size, and end-of-file size.
+  Reparse points are recorded as leaf entries and must not be followed during
+  indexed scans.
 - `dust-indexer/src/store.rs` owns the SQLite schema, aggregate totals, cursor
   transactions, and indexed queries.
 - `dust-indexer/src/journal.rs` reads the NTFS USN Journal with
