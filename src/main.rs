@@ -121,7 +121,7 @@ fn main() {
         match ntfs_index::run_elevated() {
             Ok(status) => process::exit(status),
             Err(error) => {
-                eprintln!("Could not elevate through gsudo: {error}");
+                eprintln!("Could not start the elevated process: {error}");
                 process::exit(1);
             }
         }

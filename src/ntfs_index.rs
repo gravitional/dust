@@ -138,7 +138,7 @@ mod windows_index {
         let mut disk_index = match read_index(&index_path) {
             Ok(index) => index,
             Err(_) => {
-                build_index(&volume_root)?;
+                build_index(first_path)?;
                 read_index(&index_path)?
             }
         };
@@ -147,7 +147,11 @@ mod windows_index {
             || !same_volume(&disk_index.volume_root, &volume_root)
             || journal_requires_refresh(&volume_root, disk_index.journal.as_ref())
         {
-            build_index(&volume_root)?;
+            eprintln!(
+                "NTFS index is stale; rebuilding the indexed scope {}",
+                disk_index.scope_root
+            );
+            build_index(Path::new(&disk_index.scope_root))?;
             disk_index = read_index(&index_path)?;
         }
         if disk_index.journal.is_none() {
@@ -163,8 +167,7 @@ mod windows_index {
                     "indexed paths must be on one NTFS volume",
                 ));
             }
-            if !normalize_path_text(&query).starts_with(&disk_index.scope_root.to_ascii_lowercase())
-            {
+            if !path_is_within(&query, Path::new(&disk_index.scope_root)) {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidInput,
                     "indexed path is outside the index scope; rebuild with --build-index",
@@ -189,6 +192,7 @@ mod windows_index {
         use winapi::um::winbase::{INFINITE, WAIT_OBJECT_0};
         use winapi::um::winuser::SW_SHOWNORMAL;
 
+        eprintln!("Requesting administrator privileges through the Windows UAC prompt...");
         let executable = std::env::current_exe()?;
         let arguments: Vec<_> = std::env::args_os()
             .skip(1)
@@ -415,6 +419,12 @@ mod windows_index {
         text.replace('/', "\\")
             .trim_end_matches('\\')
             .to_ascii_lowercase()
+    }
+
+    fn path_is_within(path: &Path, scope: &Path) -> bool {
+        let path = normalize_path_text(path);
+        let scope = normalize_path_text(scope);
+        path == scope || path.starts_with(&(scope + "\\"))
     }
 
     fn build_node_recursive(

@@ -112,7 +112,7 @@ dust --elevate --indexed C:\Users\tom
 
 The snapshot is stored under `%LOCALAPPDATA%\dust`. The index is scoped to the path passed to `--build-index`; queries outside that scope fall back to the normal walker. When the NTFS USN Journal is available, its journal identifier and cursor are stored with the snapshot so a journal reset or wraparound can invalidate it. Building or refreshing the snapshot is still a full scan. Indexed mode currently supports the default size report without filters, links, file counts, or filesystem limits; unsupported options automatically use the normal walker.
 
-`--elevate` re-executes the same command through the native Windows UAC prompt, waits for the elevated process, and returns its exit code. It is explicit so normal `dust` commands never trigger a UAC prompt. Choosing No or closing the prompt cancels the operation.
+`--elevate` re-executes the same command through the native Windows UAC prompt, waits for the elevated process, and returns its exit code. It is explicit so normal `dust` commands never trigger a UAC prompt. An elevated indexed query may rebuild a stale index after reading the USN Journal; it prints that status before scanning. Choosing No or closing the prompt cancels the operation.
 
 The different colors on the bars: These represent the combined tree hierarchy & disk usage. The shades of grey are used to indicate which parent folder a subfolder belongs to. For instance, look at the above screenshot. `.steam` is a folder taking 44% of the space. From the `.steam` bar is a light grey line that goes up. All these folders are inside `.steam` so if you delete `.steam` all that stuff will be gone too.
 
