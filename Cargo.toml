@@ -50,7 +50,7 @@ portable-atomic = "1.4"
 [target.'cfg(windows)'.dependencies]
 winapi-util = "0.1"
 filesize = "0.2.0"
-winapi = { version = "0.3.9", features = ["fileapi", "handleapi", "ioapiset", "winbase", "winioctl", "winnt"] }
+winapi = { version = "0.3.9", features = ["errhandlingapi", "fileapi", "handleapi", "ioapiset", "processthreadsapi", "shellapi", "synchapi", "winbase", "winerror", "winioctl", "winnt", "winuser"] }
 
 [dev-dependencies]
 assert_cmd = "2"

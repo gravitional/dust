@@ -200,7 +200,7 @@ pub struct Cli {
     #[arg(long)]
     pub indexed: bool,
 
-    /// Re-run this command through gsudo with administrator privileges.
+    /// Re-run this command with administrator privileges using the Windows UAC prompt.
     #[arg(long)]
     pub elevate: bool,
 }

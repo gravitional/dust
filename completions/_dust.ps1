@@ -94,7 +94,7 @@ Register-ArgumentCompleter -Native -CommandName 'dust' -ScriptBlock {
             [CompletionResult]::new('-j', '-j', [CompletionResultType]::ParameterName, 'Output the directory tree as json to the current directory')
             [CompletionResult]::new('--output-json', '--output-json', [CompletionResultType]::ParameterName, 'Output the directory tree as json to the current directory')
             [CompletionResult]::new('--indexed', '--indexed', [CompletionResultType]::ParameterName, 'Read the Windows NTFS persistent index instead of walking the tree')
-            [CompletionResult]::new('--elevate', '--elevate', [CompletionResultType]::ParameterName, 'Re-run this command through gsudo with administrator privileges')
+            [CompletionResult]::new('--elevate', '--elevate', [CompletionResultType]::ParameterName, 'Re-run this command with administrator privileges using the Windows UAC prompt')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
             [CompletionResult]::new('-V', '-V ', [CompletionResultType]::ParameterName, 'Print version')

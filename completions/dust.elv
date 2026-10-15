@@ -91,7 +91,7 @@ set edit:completion:arg-completer[dust] = {|@words|
             cand -j 'Output the directory tree as json to the current directory'
             cand --output-json 'Output the directory tree as json to the current directory'
             cand --indexed 'Read the Windows NTFS persistent index instead of walking the tree'
-            cand --elevate 'Re-run this command through gsudo with administrator privileges'
+            cand --elevate 'Re-run this command with administrator privileges using the Windows UAC prompt'
             cand -h 'Print help (see more with ''--help'')'
             cand --help 'Print help (see more with ''--help'')'
             cand -V 'Print version'
