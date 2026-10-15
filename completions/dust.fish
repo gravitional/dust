@@ -28,6 +28,7 @@ complete -c dust -l collapse -d 'Keep these directories collapsed' -r -F
 complete -c dust -s m -l filetime -d 'Directory \'size\' is max filetime of child files instead of disk size. while a/c/m for last accessed/changed/modified time' -r -f -a "a\t'last accessed time'
 c\t'last changed time'
 m\t'last modified time'"
+complete -c dust -l build-index -d 'Build or refresh the Windows NTFS persistent index for this path' -r -F
 complete -c dust -s p -l full-paths -d 'Subdirectories will not have their path shortened'
 complete -c dust -s L -l dereference-links -d 'dereference sym links - Treat sym links as directories and go into them'
 complete -c dust -s x -l limit-filesystem -d 'Only count the files and directories on the same filesystem as the supplied directory'
@@ -48,5 +49,6 @@ complete -c dust -l print-errors -d 'Print path with errors'
 complete -c dust -s D -l only-dir -d 'Only directories will be displayed'
 complete -c dust -s F -l only-file -d 'Only files will be displayed. (Finds your largest files)'
 complete -c dust -s j -l output-json -d 'Output the directory tree as json to the current directory'
+complete -c dust -l indexed -d 'Read the Windows NTFS persistent index instead of walking the tree'
 complete -c dust -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c dust -s V -l version -d 'Print version'

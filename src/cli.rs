@@ -191,6 +191,14 @@ pub struct Cli {
     /// while a/c/m for last accessed/changed/modified time
     #[arg(short('m'), long, value_enum)]
     pub filetime: Option<FileTime>,
+
+    /// Build or refresh the Windows NTFS persistent index for this path.
+    #[arg(long, value_name("PATH"), value_hint(ValueHint::AnyPath))]
+    pub build_index: Option<String>,
+
+    /// Read the Windows NTFS persistent index instead of walking the tree.
+    #[arg(long)]
+    pub indexed: bool,
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum)]

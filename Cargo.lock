@@ -320,6 +320,7 @@ dependencies = [
  "terminal_size",
  "thousands",
  "unicode-width",
+ "winapi",
  "winapi-util",
 ]
 

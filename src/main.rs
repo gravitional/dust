@@ -6,6 +6,7 @@ mod display_node;
 mod filter;
 mod filter_type;
 mod node;
+mod ntfs_index;
 mod platform;
 mod progress;
 mod utils;
@@ -141,6 +142,19 @@ fn main() {
     .filter(|path| !path.is_empty())
     .collect::<Vec<_>>();
 
+    if let Some(path) = options.build_index.as_deref() {
+        match ntfs_index::build_index(PathBuf::from(path).as_path()) {
+            Ok(index_path) => {
+                println!("NTFS index written to {}", index_path.display());
+                return;
+            }
+            Err(error) => {
+                eprintln!("Could not build NTFS index: {error}");
+                process::exit(1);
+            }
+        }
+    }
+
     let summarize_file_types = options.file_types;
 
     let filter_regexs = get_regex_value(options.filter.as_ref());
@@ -243,6 +257,17 @@ fn main() {
     let filter_modified_time = config.get_modified_time_operator(&options);
     let filter_accessed_time = config.get_accessed_time_operator(&options);
     let filter_changed_time = config.get_changed_time_operator(&options);
+    let indexed_compatible = options.indexed
+        && filter_regexs.is_empty()
+        && invert_filter_regexs.is_empty()
+        && !options.ignore_hidden
+        && !options.dereference_links
+        && !options.limit_filesystem
+        && !options.filecount
+        && by_filetime.is_none()
+        && filter_modified_time.is_none()
+        && filter_accessed_time.is_none()
+        && filter_changed_time.is_none();
 
     let walk_data = WalkData {
         ignore_directories: ignored_full_path,
@@ -271,7 +296,18 @@ fn main() {
     }
 
     init_rayon(&threads_to_use).install(|| {
-        let top_level_nodes = walk_it(simplified_dirs, &walk_data);
+        let top_level_nodes = if indexed_compatible {
+            let indexed_dirs: Vec<PathBuf> = simplified_dirs.iter().cloned().collect();
+            match ntfs_index::load_index(&indexed_dirs, walk_data.use_apparent_size) {
+                Ok(nodes) => nodes,
+                Err(error) => {
+                    eprintln!("Indexed mode unavailable ({error}); walking normally");
+                    walk_it(simplified_dirs, &walk_data)
+                }
+            }
+        } else {
+            walk_it(simplified_dirs, &walk_data)
+        };
 
         let tree = match summarize_file_types {
             true => get_all_file_types(&top_level_nodes, number_of_lines, walk_data.by_filetime),

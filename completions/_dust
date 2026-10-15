@@ -71,6 +71,7 @@ m\:"last modified time"))' \
 '--filetime=[Directory '\''size'\'' is max filetime of child files instead of disk size. while a/c/m for last accessed/changed/modified time]:FILETIME:((a\:"last accessed time"
 c\:"last changed time"
 m\:"last modified time"))' \
+'--build-index=[Build or refresh the Windows NTFS persistent index for this path]:PATH:_files' \
 '-p[Subdirectories will not have their path shortened]' \
 '--full-paths[Subdirectories will not have their path shortened]' \
 '-L[dereference sym links - Treat sym links as directories and go into them]' \
@@ -108,6 +109,7 @@ m\:"last modified time"))' \
 '(-D --only-dir)--only-file[Only files will be displayed. (Finds your largest files)]' \
 '-j[Output the directory tree as json to the current directory]' \
 '--output-json[Output the directory tree as json to the current directory]' \
+'--indexed[Read the Windows NTFS persistent index instead of walking the tree]' \
 '-h[Print help (see more with '\''--help'\'')]' \
 '--help[Print help (see more with '\''--help'\'')]' \
 '-V[Print version]' \

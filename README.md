@@ -98,6 +98,17 @@ Dust is meant to give you an instant overview of which directories are using dis
 
 Dust will list a slightly-less-than-the-terminal-height number of the biggest subdirectories or files and will smartly recurse down the tree to find the larger ones. There is no need for a '-d' flag or a '-h' flag. The largest subdirectories will be colored.
 
+### Windows NTFS index (experimental)
+
+On Windows, an optional persistent snapshot can avoid walking the directory tree for repeated reports:
+
+```powershell
+dust --build-index C:\Users\tom
+dust --indexed C:\Users\tom
+```
+
+The snapshot is stored under `%LOCALAPPDATA%\dust`. The index is scoped to the path passed to `--build-index`; queries outside that scope fall back to the normal walker. When the NTFS USN Journal is available, its journal identifier and cursor are stored with the snapshot so a journal reset or wraparound can invalidate it. Building or refreshing the snapshot is still a full scan. Indexed mode currently supports the default size report without filters, links, file counts, or filesystem limits; unsupported options automatically use the normal walker.
+
 The different colors on the bars: These represent the combined tree hierarchy & disk usage. The shades of grey are used to indicate which parent folder a subfolder belongs to. For instance, look at the above screenshot. `.steam` is a folder taking 44% of the space. From the `.steam` bar is a light grey line that goes up. All these folders are inside `.steam` so if you delete `.steam` all that stuff will be gone too.
 
 If you are new to the tool I recommend to try tweaking the `-n` parameter. `dust -n 10`, `dust -n 50`.
