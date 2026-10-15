@@ -29,6 +29,7 @@ complete -c dust -s m -l filetime -d 'Directory \'size\' is max filetime of chil
 c\t'last changed time'
 m\t'last modified time'"
 complete -c dust -l build-index -d 'Build or refresh the Windows NTFS persistent index for this path' -r -F
+complete -c dust -l index-database -d 'Internal database path passed by the Windows Service Control Manager' -r
 complete -c dust -s p -l full-paths -d 'Subdirectories will not have their path shortened'
 complete -c dust -s L -l dereference-links -d 'dereference sym links - Treat sym links as directories and go into them'
 complete -c dust -s x -l limit-filesystem -d 'Only count the files and directories on the same filesystem as the supplied directory'
@@ -50,6 +51,10 @@ complete -c dust -s D -l only-dir -d 'Only directories will be displayed'
 complete -c dust -s F -l only-file -d 'Only files will be displayed. (Finds your largest files)'
 complete -c dust -s j -l output-json -d 'Output the directory tree as json to the current directory'
 complete -c dust -l indexed -d 'Read the Windows NTFS persistent index instead of walking the tree'
+complete -c dust -l no-index -d 'Do not use a local NTFS index, even if one is available'
+complete -c dust -l top -d 'Show only direct children, accumulating deeper sizes without retaining the full tree'
+complete -c dust -l install-indexer-service -d 'Install the background NTFS index service (requires administrator approval)'
+complete -c dust -l indexer-service -d 'Internal Windows Service Control Manager entry point'
 complete -c dust -l elevate -d 'Re-run this command with administrator privileges using the Windows UAC prompt'
 complete -c dust -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c dust -s V -l version -d 'Print version'

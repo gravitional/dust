@@ -5,6 +5,7 @@ mod display;
 mod display_node;
 mod filter;
 mod filter_type;
+mod index_client;
 mod node;
 mod ntfs_index;
 mod platform;
@@ -127,6 +128,34 @@ fn main() {
         }
     }
 
+    if options.indexer_service || options.install_indexer_service {
+        #[cfg(windows)]
+        let result = if options.indexer_service {
+            dust_indexer::service::run(options.index_database.as_deref())
+        } else {
+            options
+                .build_index
+                .as_deref()
+                .or_else(|| options.index_database.as_deref())
+                .or_else(|| {
+                    options
+                        .params
+                        .as_ref()
+                        .and_then(|v| v.first())
+                        .map(String::as_str)
+                })
+                .ok_or_else(|| "specify the directory with --build-index".into())
+                .and_then(|scope| dust_indexer::service::install(std::path::Path::new(scope)))
+        };
+        #[cfg(not(windows))]
+        let result: Result<(), String> = Err("Windows services require Windows".into());
+        if let Err(error) = result {
+            eprintln!("Indexer service: {error}");
+            process::exit(1);
+        }
+        return;
+    }
+
     let config = get_config(options.config.as_ref());
 
     let errors = RuntimeErrors::default();
@@ -154,7 +183,7 @@ fn main() {
     .collect::<Vec<_>>();
 
     if let Some(path) = options.build_index.as_deref() {
-        match ntfs_index::build_index(PathBuf::from(path).as_path()) {
+        match index_client::build(PathBuf::from(path).as_path()) {
             Ok(index_path) => {
                 println!("NTFS index written to {}", index_path.display());
                 return;
@@ -176,7 +205,11 @@ fn main() {
         None => get_width_of_terminal(),
     };
 
-    let depth = config.get_depth(&options);
+    let depth = if options.top {
+        1
+    } else {
+        config.get_depth(&options)
+    };
 
     // If depth is set, or the output is json (which is not rendered to a
     // terminal), then we set the default number_of_lines to be max
@@ -240,7 +273,19 @@ fn main() {
 
     let ignored_full_path: HashSet<PathBuf> = ignore_directories
         .into_iter()
-        .flat_map(|x| simplified_dirs.iter().map(move |d| d.join(&x)))
+        .flat_map(|x| {
+            simplified_dirs.iter().map(move |d| {
+                if x.is_absolute() {
+                    let canonical_root = std::fs::canonicalize(d).unwrap_or_else(|_| d.clone());
+                    match x.strip_prefix(&canonical_root) {
+                        Ok(relative) => d.join(relative),
+                        Err(_) => x.clone(),
+                    }
+                } else {
+                    d.join(&x)
+                }
+            })
+        })
         .collect();
 
     let output_format = config.get_output_format(&options);
@@ -268,13 +313,17 @@ fn main() {
     let filter_modified_time = config.get_modified_time_operator(&options);
     let filter_accessed_time = config.get_accessed_time_operator(&options);
     let filter_changed_time = config.get_changed_time_operator(&options);
-    let indexed_compatible = options.indexed
+    let indexed_compatible = !options.no_index
+        && (options.indexed || cfg!(windows))
         && filter_regexs.is_empty()
         && invert_filter_regexs.is_empty()
-        && !options.ignore_hidden
+        && !ignore_hidden
         && !options.dereference_links
-        && !options.limit_filesystem
+        && !limit_filesystem
         && !options.filecount
+        && ignored_full_path.is_empty()
+        && !summarize_file_types
+        && options.collapse.is_none()
         && by_filetime.is_none()
         && filter_modified_time.is_none()
         && filter_accessed_time.is_none()
@@ -307,17 +356,30 @@ fn main() {
     }
 
     init_rayon(&threads_to_use).install(|| {
-        let top_level_nodes = if indexed_compatible {
-            let indexed_dirs: Vec<PathBuf> = simplified_dirs.iter().cloned().collect();
-            match ntfs_index::load_index(&indexed_dirs, walk_data.use_apparent_size) {
-                Ok(nodes) => nodes,
+        let scan = || {
+            if options.top {
+                dir_walker::walk_top_it(simplified_dirs.clone(), &walk_data)
+            } else {
+                walk_it(simplified_dirs.clone(), &walk_data)
+            }
+        };
+        let use_index = indexed_compatible;
+        let top_level_nodes = if use_index {
+            let indexed: Result<Vec<_>, _> = simplified_dirs
+                .iter()
+                .map(|path| index_client::load(path, walk_data.use_apparent_size, depth, true))
+                .collect();
+            match indexed {
+                Ok(nodes) => nodes.into_iter().flatten().collect(),
                 Err(error) => {
-                    eprintln!("Indexed mode unavailable ({error}); walking normally");
-                    walk_it(simplified_dirs, &walk_data)
+                    if options.indexed {
+                        eprintln!("Indexed mode unavailable ({error}); walking normally");
+                    }
+                    scan()
                 }
             }
         } else {
-            walk_it(simplified_dirs, &walk_data)
+            scan()
         };
 
         let tree = match summarize_file_types {

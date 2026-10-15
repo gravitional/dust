@@ -200,6 +200,26 @@ pub struct Cli {
     #[arg(long)]
     pub indexed: bool,
 
+    /// Do not use a local NTFS index, even if one is available.
+    #[arg(long)]
+    pub no_index: bool,
+
+    /// Show only direct children, accumulating deeper sizes without retaining the full tree.
+    #[arg(long, conflicts_with_all = ["filetime", "file_types", "only_file", "dereference_links", "output_json"])]
+    pub top: bool,
+
+    /// Install the background NTFS index service (requires administrator approval).
+    #[arg(long)]
+    pub install_indexer_service: bool,
+
+    /// Internal Windows Service Control Manager entry point.
+    #[arg(long, hide = true)]
+    pub indexer_service: bool,
+
+    /// Internal database path passed by the Windows Service Control Manager.
+    #[arg(long, hide = true)]
+    pub index_database: Option<String>,
+
     /// Re-run this command with administrator privileges using the Windows UAC prompt.
     #[arg(long)]
     pub elevate: bool,

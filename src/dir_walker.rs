@@ -193,19 +193,76 @@ fn is_ignored_path(path: &Path, walk_data: &WalkData) -> bool {
         return true;
     }
 
-    // Entry is inside an ignored absolute path
-    // Absolute paths should be canonicalized before being added to `WalkData.ignore_directories`
+    // Paths are canonicalized when the walk roots and ignore paths are built.
+    // Avoid canonicalizing every entry in this hot loop.
     for ignored_path in walk_data.ignore_directories.iter() {
-        if !ignored_path.is_absolute() {
-            continue;
-        }
-        let absolute_entry_path = std::fs::canonicalize(path).unwrap_or_default();
-        if absolute_entry_path.starts_with(ignored_path) {
+        if path.starts_with(ignored_path) {
             return true;
         }
     }
 
     false
+}
+
+/// Scan only the root's direct children while recursively accumulating each
+/// child's size. This is used by non-interactive reports that do not need a
+/// complete in-memory tree.
+pub fn walk_top_it(dirs: HashSet<PathBuf>, walk_data: &WalkData) -> Vec<Node> {
+    dirs.into_iter()
+        .filter_map(|root| {
+            let children = aggregate_children(&root, 1, walk_data);
+            let mut node = build_node(root, children, false, false, 0, walk_data, None)?;
+            node.size += node.children.iter().map(|child| child.size).sum::<u64>();
+            Some(node)
+        })
+        .collect()
+}
+
+fn aggregate_children(dir: &Path, depth: usize, walk_data: &WalkData) -> Vec<Node> {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return Vec::new();
+    };
+    entries
+        .filter_map(|result| {
+            let entry = result.ok()?;
+            let file_type = entry.file_type().ok()?;
+            let metadata = cached_entry_metadata(&entry).ok().flatten();
+            let entry = WalkEntry {
+                entry,
+                file_type,
+                metadata,
+            };
+            if ignore_file(&entry, walk_data) {
+                return None;
+            }
+            let is_symlink = entry.file_type.is_symlink();
+            if entry.file_type.is_dir() {
+                let children = aggregate_children(&entry.path(), depth + 1, walk_data);
+                let mut node = build_node(
+                    entry.path(),
+                    children,
+                    is_symlink,
+                    false,
+                    depth,
+                    walk_data,
+                    entry.metadata.as_ref(),
+                )?;
+                node.size += node.children.iter().map(|child| child.size).sum::<u64>();
+                node.children.clear();
+                Some(node)
+            } else {
+                build_node(
+                    entry.path(),
+                    Vec::new(),
+                    is_symlink,
+                    entry.file_type.is_file(),
+                    depth,
+                    walk_data,
+                    entry.metadata.as_ref(),
+                )
+            }
+        })
+        .collect()
 }
 
 fn ignore_file(entry: &WalkEntry, walk_data: &WalkData) -> bool {
@@ -711,6 +768,37 @@ mod tests {
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].children.len(), N);
         assert_eq!(count_nodes(&result[0]), N + 1);
+    }
+
+    #[test]
+    fn top_scan_aggregates_nested_sizes_without_retaining_descendants() {
+        let tmp = tempfile::tempdir().unwrap();
+        let nested = tmp.path().join("nested");
+        std::fs::create_dir(&nested).unwrap();
+        std::fs::write(nested.join("large.bin"), vec![7; 4096]).unwrap();
+        std::fs::write(tmp.path().join("root.bin"), vec![3; 1024]).unwrap();
+
+        let walkdata = create_walker(true);
+        let mut roots = HashSet::new();
+        roots.insert(tmp.path().to_path_buf());
+        let top = walk_top_it(roots.clone(), &walkdata);
+        let full = walk_it(roots, &walkdata);
+
+        assert_eq!(top.len(), 1);
+        assert_eq!(top[0].children.len(), 2);
+        assert!(top[0].children.iter().all(|node| node.children.is_empty()));
+        assert_eq!(top[0].size, full[0].size);
+        let nested_top = top[0]
+            .children
+            .iter()
+            .find(|node| node.name.ends_with("nested"))
+            .unwrap();
+        let nested_full = full[0]
+            .children
+            .iter()
+            .find(|node| node.name.ends_with("nested"))
+            .unwrap();
+        assert_eq!(nested_top.size, nested_full.size);
     }
 
     #[test]

@@ -72,6 +72,7 @@ m\:"last modified time"))' \
 c\:"last changed time"
 m\:"last modified time"))' \
 '--build-index=[Build or refresh the Windows NTFS persistent index for this path]:PATH:_files' \
+'--index-database=[Internal database path passed by the Windows Service Control Manager]:INDEX_DATABASE:_default' \
 '-p[Subdirectories will not have their path shortened]' \
 '--full-paths[Subdirectories will not have their path shortened]' \
 '-L[dereference sym links - Treat sym links as directories and go into them]' \
@@ -110,6 +111,10 @@ m\:"last modified time"))' \
 '-j[Output the directory tree as json to the current directory]' \
 '--output-json[Output the directory tree as json to the current directory]' \
 '--indexed[Read the Windows NTFS persistent index instead of walking the tree]' \
+'--no-index[Do not use a local NTFS index, even if one is available]' \
+'(-m --filetime -t --file-types -F --only-file -L --dereference-links -j --output-json)--top[Show only direct children, accumulating deeper sizes without retaining the full tree]' \
+'--install-indexer-service[Install the background NTFS index service (requires administrator approval)]' \
+'--indexer-service[Internal Windows Service Control Manager entry point]' \
 '--elevate[Re-run this command with administrator privileges using the Windows UAC prompt]' \
 '-h[Print help (see more with '\''--help'\'')]' \
 '--help[Print help (see more with '\''--help'\'')]' \
