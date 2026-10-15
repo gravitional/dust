@@ -26,7 +26,7 @@ use crate::node::build_node;
 use std::fs::DirEntry;
 
 use crate::node::FileTime;
-use crate::platform::get_metadata;
+use crate::platform::get_metadata_cached;
 
 #[derive(Debug)]
 pub enum Operator {
@@ -208,16 +208,22 @@ fn is_ignored_path(path: &Path, walk_data: &WalkData) -> bool {
     false
 }
 
-fn ignore_file(entry: &DirEntry, walk_data: &WalkData) -> bool {
+fn ignore_file(entry: &WalkEntry, walk_data: &WalkData) -> bool {
     if is_ignored_path(&entry.path(), walk_data) {
         return true;
     }
 
-    let is_dot_file = entry.file_name().to_str().unwrap_or("").starts_with('.');
-    let follow_links = walk_data.follow_links && entry.file_type().is_ok_and(|ft| ft.is_symlink());
+    let is_dot_file = entry
+        .entry
+        .file_name()
+        .to_str()
+        .unwrap_or("")
+        .starts_with('.');
+    let follow_links = walk_data.follow_links && entry.file_type.is_symlink();
 
     if !walk_data.allowed_filesystems.is_empty() {
-        let size_inode_device = get_metadata(entry.path(), false, follow_links);
+        let size_inode_device =
+            get_metadata_cached(&entry.path(), entry.metadata.as_ref(), false, follow_links);
         if let Some((_size, Some((_id, dev)), _gunk)) = size_inode_device
             && !walk_data.allowed_filesystems.contains(&dev)
         {
@@ -228,9 +234,10 @@ fn ignore_file(entry: &DirEntry, walk_data: &WalkData) -> bool {
         || walk_data.filter_modified_time.is_some()
         || walk_data.filter_changed_time.is_some()
     {
-        let size_inode_device = get_metadata(entry.path(), false, follow_links);
+        let size_inode_device =
+            get_metadata_cached(&entry.path(), entry.metadata.as_ref(), false, follow_links);
         if let Some((_, _, (modified_time, accessed_time, changed_time))) = size_inode_device
-            && entry.path().is_file()
+            && entry.file_type.is_file()
             && [
                 (&walk_data.filter_modified_time, modified_time),
                 (&walk_data.filter_accessed_time, accessed_time),
@@ -247,20 +254,34 @@ fn ignore_file(entry: &DirEntry, walk_data: &WalkData) -> bool {
 
     // Keeping `walk_data.filter_regex.is_empty()` is important for performance reasons, it stops unnecessary work
     if !walk_data.filter_regex.is_empty()
-        && entry.path().is_file()
+        && entry.file_type.is_file()
         && is_filtered_out_due_to_regex(walk_data.filter_regex, &entry.path())
     {
         return true;
     }
 
     if !walk_data.invert_filter_regex.is_empty()
-        && entry.path().is_file()
+        && entry.file_type.is_file()
         && is_filtered_out_due_to_invert_regex(walk_data.invert_filter_regex, &entry.path())
     {
         return true;
     }
 
     is_dot_file && walk_data.ignore_hidden
+}
+
+struct WalkEntry {
+    entry: DirEntry,
+    file_type: std::fs::FileType,
+    // On Windows this is derived from the directory enumeration record, so
+    // building a file node does not open the path a second time.
+    metadata: Option<std::fs::Metadata>,
+}
+
+impl WalkEntry {
+    fn path(&self) -> PathBuf {
+        self.entry.path()
+    }
 }
 
 fn walk_dir<'scope>(
@@ -287,7 +308,19 @@ fn walk_dir<'scope>(
             // This is the load-bearing structural choice for retry safety: if
             // we decide to retry, we throw the Vec away and re-list, with no
             // spawned subdir tasks or pushed file nodes to roll back.
-            let collected: Vec<_> = entries.collect();
+            let collected: Vec<_> = entries
+                .map(|result| {
+                    result.and_then(|entry| {
+                        let file_type = entry.file_type()?;
+                        let metadata = cached_entry_metadata(&entry)?;
+                        Ok(WalkEntry {
+                            entry,
+                            file_type,
+                            metadata,
+                        })
+                    })
+                })
+                .collect();
 
             // If any entry yielded a retryable error, throw the Vec away and
             // re-list. We record only that one error (which bumps the EINTR
@@ -345,6 +378,16 @@ fn walk_dir<'scope>(
     finalize_chain(pending, walk_data);
 }
 
+#[cfg(windows)]
+fn cached_entry_metadata(entry: &DirEntry) -> std::io::Result<Option<std::fs::Metadata>> {
+    entry.metadata().map(Some)
+}
+
+#[cfg(not(windows))]
+fn cached_entry_metadata(_entry: &DirEntry) -> std::io::Result<Option<std::fs::Metadata>> {
+    Ok(None)
+}
+
 // Returns the file's Node when the entry is a file (so the caller can
 // gather it via rayon's collect). Returns None for ignored entries and
 // for subdirectories. Subdirs spawn a walk task and contribute their
@@ -352,17 +395,16 @@ fn walk_dir<'scope>(
 fn process_entry<'scope>(
     scope: &rayon::Scope<'scope>,
     pending: &Arc<PendingDir>,
-    entry: &DirEntry,
+    entry: &WalkEntry,
     walk_data: &'scope WalkData<'scope>,
 ) -> Option<Node> {
     if ignore_file(entry, walk_data) {
         return None;
     }
-    let data = entry.file_type().ok()?;
-    let is_symlink = data.is_symlink();
+    let is_symlink = entry.file_type.is_symlink();
 
     // If the entry is a directory we'll spawn off a new task to walk it.
-    if data.is_dir() || (walk_data.follow_links && is_symlink) {
+    if entry.file_type.is_dir() || (walk_data.follow_links && is_symlink) {
         // Increment must happen before scope.spawn so a fast child's decrement
         // can never observe pending = 0 before this walk_dir's finalize_chain
         // runs. It can be Relaxed ordering because rayon's scope spawn does
@@ -385,9 +427,10 @@ fn process_entry<'scope>(
         entry.path(),
         vec![],
         is_symlink,
-        data.is_file(),
+        entry.file_type.is_file(),
         pending.depth,
         walk_data,
+        entry.metadata.as_ref(),
     );
 
     let prog_data = &walk_data.progress_data;
@@ -449,6 +492,7 @@ fn finalize_chain(mut pending: Arc<PendingDir>, walk_data: &WalkData) {
             false,
             pending.depth,
             walk_data,
+            None,
         );
         pending = parent;
     }

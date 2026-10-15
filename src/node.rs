@@ -1,5 +1,5 @@
 use crate::dir_walker::WalkData;
-use crate::platform::get_metadata;
+use crate::platform::get_metadata_cached;
 use crate::utils::is_filtered_out_due_to_file_time;
 use crate::utils::is_filtered_out_due_to_invert_regex;
 use crate::utils::is_filtered_out_due_to_regex;
@@ -41,13 +41,15 @@ pub fn build_node(
     is_file: bool,
     depth: usize,
     walk_data: &WalkData,
+    cached_metadata: Option<&std::fs::Metadata>,
 ) -> Option<Node> {
     let use_apparent_size = walk_data.use_apparent_size;
     let by_filecount = walk_data.by_filecount;
     let by_filetime = &walk_data.by_filetime;
 
-    get_metadata(
+    get_metadata_cached(
         &dir,
+        cached_metadata,
         use_apparent_size,
         walk_data.follow_links && is_symlink,
     )

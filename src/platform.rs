@@ -70,6 +70,56 @@ pub fn get_metadata<P: AsRef<Path>>(
     }
 }
 
+pub fn get_metadata_cached(
+    path: &Path,
+    cached: Option<&std::fs::Metadata>,
+    use_apparent_size: bool,
+    follow_links: bool,
+) -> Option<(u64, Option<InodeAndDevice>, FileTime)> {
+    #[cfg(target_family = "windows")]
+    if let Some(md) = cached {
+        use std::os::windows::fs::MetadataExt;
+        const FILE_ATTRIBUTE_ARCHIVE: u32 = 0x20;
+        const FILE_ATTRIBUTE_READONLY: u32 = 0x01;
+        const FILE_ATTRIBUTE_HIDDEN: u32 = 0x02;
+        const FILE_ATTRIBUTE_SYSTEM: u32 = 0x04;
+        const FILE_ATTRIBUTE_NORMAL: u32 = 0x80;
+        const FILE_ATTRIBUTE_DIRECTORY: u32 = 0x10;
+        const FILE_ATTRIBUTE_SPARSE_FILE: u32 = 0x00000200;
+        const FILE_ATTRIBUTE_PINNED: u32 = 0x00080000;
+        const FILE_ATTRIBUTE_UNPINNED: u32 = 0x00100000;
+        const FILE_ATTRIBUTE_RECALL_ON_OPEN: u32 = 0x00040000;
+        const FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS: u32 = 0x00400000;
+        const FILE_ATTRIBUTE_OFFLINE: u32 = 0x00001000;
+        const IS_PROBABLY_ONEDRIVE: u32 = FILE_ATTRIBUTE_SPARSE_FILE
+            | FILE_ATTRIBUTE_PINNED
+            | FILE_ATTRIBUTE_UNPINNED
+            | FILE_ATTRIBUTE_RECALL_ON_OPEN
+            | FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS
+            | FILE_ATTRIBUTE_OFFLINE;
+        let attributes = md.file_attributes();
+        let attr_filtered =
+            attributes & !(FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_READONLY | FILE_ATTRIBUTE_SYSTEM);
+        if ((attr_filtered & FILE_ATTRIBUTE_ARCHIVE != 0)
+            || (attr_filtered & FILE_ATTRIBUTE_DIRECTORY != 0)
+            || attributes == FILE_ATTRIBUTE_NORMAL)
+            && !((attr_filtered & IS_PROBABLY_ONEDRIVE != 0) && use_apparent_size)
+        {
+            return Some((
+                md.len(),
+                None,
+                (
+                    filetime_to_unix_seconds(md.last_write_time()),
+                    filetime_to_unix_seconds(md.last_access_time()),
+                    filetime_to_unix_seconds(md.creation_time()),
+                ),
+            ));
+        }
+    }
+
+    get_metadata(path, use_apparent_size, follow_links)
+}
+
 #[cfg(target_family = "windows")]
 pub fn get_metadata<P: AsRef<Path>>(
     path: P,
