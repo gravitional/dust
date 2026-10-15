@@ -110,6 +110,7 @@ m\:"last modified time"))' \
 '-j[Output the directory tree as json to the current directory]' \
 '--output-json[Output the directory tree as json to the current directory]' \
 '--indexed[Read the Windows NTFS persistent index instead of walking the tree]' \
+'--elevate[Re-run this command through gsudo with administrator privileges]' \
 '-h[Print help (see more with '\''--help'\'')]' \
 '--help[Print help (see more with '\''--help'\'')]' \
 '-V[Print version]' \

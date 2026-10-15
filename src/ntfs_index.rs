@@ -27,6 +27,14 @@ pub fn load_index(_paths: &[PathBuf], _apparent_size: bool) -> io::Result<Vec<No
     ))
 }
 
+#[cfg(not(windows))]
+pub fn run_elevated() -> io::Result<i32> {
+    Err(io::Error::new(
+        io::ErrorKind::Unsupported,
+        "--elevate is only available on Windows",
+    ))
+}
+
 #[cfg(windows)]
 mod windows_index {
     use super::*;
@@ -167,6 +175,27 @@ mod windows_index {
             }
         }
         Ok(result)
+    }
+
+    pub fn run_elevated() -> io::Result<i32> {
+        use std::process::Command;
+
+        let executable = std::env::current_exe()?;
+        let arguments: Vec<_> = std::env::args_os()
+            .skip(1)
+            .filter(|arg| arg != "--elevate")
+            .collect();
+        let status = Command::new("gsudo")
+            .arg(executable)
+            .args(arguments)
+            .status()
+            .map_err(|error| {
+                io::Error::new(
+                    error.kind(),
+                    format!("gsudo was not found or could not start: {error}"),
+                )
+            })?;
+        Ok(status.code().unwrap_or(1))
     }
 
     fn read_index(path: &Path) -> io::Result<DiskIndex> {
@@ -395,4 +424,4 @@ mod windows_index {
 }
 
 #[cfg(windows)]
-pub use windows_index::{build_index, load_index};
+pub use windows_index::{build_index, load_index, run_elevated};

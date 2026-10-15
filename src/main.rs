@@ -116,6 +116,17 @@ fn get_regex_value(maybe_value: Option<&Vec<String>>) -> Vec<Regex> {
 
 fn main() {
     let options = Cli::parse();
+
+    if options.elevate {
+        match ntfs_index::run_elevated() {
+            Ok(status) => process::exit(status),
+            Err(error) => {
+                eprintln!("Could not elevate through gsudo: {error}");
+                process::exit(1);
+            }
+        }
+    }
+
     let config = get_config(options.config.as_ref());
 
     let errors = RuntimeErrors::default();

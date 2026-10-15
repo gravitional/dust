@@ -199,6 +199,10 @@ pub struct Cli {
     /// Read the Windows NTFS persistent index instead of walking the tree.
     #[arg(long)]
     pub indexed: bool,
+
+    /// Re-run this command through gsudo with administrator privileges.
+    #[arg(long)]
+    pub elevate: bool,
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
